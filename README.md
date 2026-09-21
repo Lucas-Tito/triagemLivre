@@ -152,6 +152,97 @@ Parsifal, que já é a ferramenta oficial do processo. Adotar isso significa man
 dois em sincronia. E a conta só fecha no volume alto — se a calibração da string
 enxugar o resultado para cerca de 2 mil registros, não vale construir.
 
+## Relação com o Parsifal
+
+O [Parsifal](https://github.com/vitorfs/parsifal) é a ferramenta oficial do processo, e
+não é intenção substituí-lo. O que segue é o levantamento do que ele cobre, feito lendo
+o código-fonte (branch `dev`, consultado em 21/09/2026), para que cada ideia daqui
+exista por um motivo verificado e não por suposição.
+
+É uma aplicação Django licenciada sob MIT, hospedada em parsif.al e auto-hospedável.
+
+### O que ele já faz
+
+Planejamento completo do protocolo — objetivo, PICOC, questões de pesquisa, palavras-chave
+e sinônimos, fontes, string de busca, critérios de inclusão e exclusão, checklist de
+qualidade e definição do formulário de extração. Na condução: importação de BibTeX
+(arquivo ou colado), detecção de duplicatas, triagem com status por artigo, ações em
+lote, avaliação de qualidade com nota de corte, extração de dados em formulário tipado,
+dois gráficos (seleção e artigos por ano) e colaboração por co-autores.
+
+Exporta o protocolo em `.docx`, a extração em `.xls`, e — o que mais interessa aqui — a
+lista de artigos em `.xls` com título, resumo, DOI, fonte, `bibtex_key`, status, critério
+de seleção e comentários.
+
+### O que ele não faz, das ideias daqui
+
+| Ideia | No Parsifal | O que falta |
+| --- | --- | --- |
+| Relatório de duplicatas | Agrupa por `slugify(título)` — `Review.get_duplicate_articles` | Não usa DOI, e só pega título idêntico depois de normalizado. Escapa subtítulo ausente, preprint × publicado, variação de grafia |
+| Triagem por título e resumo | Tela web, status por artigo, ação em lote | Decisão por tecla, sem recarregar página |
+| Dupla revisão independente | Avaliação de qualidade e extração são por usuário; a **seleção** não: o status é um campo único do artigo | Cegamento entre revisores, lista de divergências, Kappa |
+| Motivo da exclusão | Um critério por artigo, mais comentário | Atende ao protocolo, que prevê um motivo por exclusão |
+| Números do PRISMA | Gráfico de seleção e de artigos por ano | As contagens por etapa do fluxograma |
+| Exportação por escopo para IA | Não existe | Tudo |
+| Parecer de IA como terceiro revisor | Não existe | Tudo |
+| Sessão isolada para agente de CLI | Não existe | Tudo |
+| Trabalho offline, dado no seu disco | Serviço web | Tudo |
+
+Uma ressalva de honestidade: o modelo de dados tem `StudySelection` e `Study`, que
+guardam status **por usuário**. As telas de condução, porém, operam sobre
+`Article.status`, que é um só. Antes de contar com seleção por revisor, vale conferir na
+instância em uso.
+
+## Viabilidade de integração com o Parsifal
+
+**Não existe API.** Não há `djangorestframework` nas dependências, e todos os endpoints
+são views Django com autenticação por sessão e CSRF, devolvendo HTML. Isso elimina a
+integração óbvia e deixa três caminhos.
+
+### A. Por arquivo — viável hoje, e é o recomendado
+
+O Parsifal continua sendo o registro oficial. O ciclo:
+
+1. Importa o BibTeX das bases no Parsifal, como já seria feito.
+2. Exporta a lista de artigos em `.xls` (traz resumo, DOI e `bibtex_key`).
+3. A ferramenta lê esse arquivo e faz o que o Parsifal não faz: relatório de duplicatas
+   por DOI e título aproximado, lotes por escopo para IA, sessão isolada para agente
+   de CLI.
+4. O retorno é uma **lista de `bibtex_key` por ação** — "estes 180 são exclusão por
+   Exc1" — que você aplica no Parsifal com a ação em lote.
+
+A `bibtex_key` é a chave que costura os dois lados. O que a ferramenta devolve é sempre
+uma lista de identificadores, nunca registros: reimportar BibTeX no Parsifal cria artigo
+novo em vez de atualizar o existente, e duplicaria o corpus.
+
+**Custo**: baixo — ler `.xls` antigo (`xlwt` escreve no formato pré-2007) e gerar a lista
+de saída. **Limite**: o retorno é manual. Você seleciona e clica; a ferramenta só diz o
+quê.
+
+### B. Automatizar a interface — possível, não recomendado
+
+Fazer login por sessão, carregar o CSRF e postar em
+`conducting/multiple_articles_action/reject/` funciona tecnicamente. Mas quebra a cada
+mudança de template, depende de credencial de um serviço de terceiro, e escreve no
+registro oficial da pesquisa sem que ninguém tenha olhado. O ganho sobre o caminho A é
+poupar alguns cliques em lote — não compensa o risco.
+
+### C. Auto-hospedar o Parsifal — fecha o ciclo, muda o combinado
+
+A licença MIT permite. Com uma instância própria, dá para ler o Postgres direto e até
+escrever status de volta, o que fecha o ciclo por inteiro.
+
+O custo não é técnico, é combinado: o registro oficial deixaria de ser o parsif.al que o
+orientador e o restante da equipe acessam, e passaria a ser um servidor seu. Só faz
+sentido se o grupo inteiro migrar.
+
+### Conclusão
+
+Caminho **A**. A integração é de mão única para dentro (o `.xls` do Parsifal entra) e de
+mão única para fora (uma lista de `bibtex_key` sai), e o registro oficial continua onde
+está. É o suficiente para tudo que esta ferramenta se propõe a fazer, e não cria
+dependência de coisa nenhuma que possa quebrar sem aviso.
+
 ## Fora de escopo, por ora
 
 **Formulário de extração e análise.** Depois da triagem vem a leitura integral e o
