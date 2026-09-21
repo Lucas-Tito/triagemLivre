@@ -66,6 +66,74 @@ excluir em bloco o ruído previsível (a literatura de "explainable AI", que a s
 arrasta às centenas), e destacar os casos em que os dois revisores concordaram mas a
 IA discorda — que é onde vale gastar atenção.
 
+### Integração com agente de CLI
+
+A exportação acima serve para quem vai colar o texto numa janela de chat. Quem trabalha
+com agente de terminal — Claude Code, Codex, Gemini CLI — não precisa do intermediário:
+o agente lê o lote direto do disco e escreve o parecer de volta.
+
+O que ele lê, porém, é deliberadamente pouco.
+
+#### Por que restringir o que o agente vê
+
+Não é privacidade: registro bibliográfico de base indexada é público. São duas outras
+razões.
+
+**Cegamento.** O parecer da IA só vale como terceira opinião se for independente. Se o
+agente enxerga as decisões que os dois revisores já tomaram, ele tende a concordar com
+elas — e aí deixa de apontar justamente os casos em que a dupla errou junto, que é a
+única coisa que ele tinha de útil a oferecer. É a mesma razão pela qual os dois
+revisores não veem a decisão um do outro.
+
+**Não escrever no material.** Um agente com o arquivo do projeto aberto pode alterar uma
+decisão, e a alteração fica indistinguível de uma sua.
+
+Há ainda um efeito prático: quanto menos campo por registro, maior o lote que cabe numa
+resposta. Trezentos títulos cabem; trezentos registros completos, não.
+
+#### O que é garantia e o que é convenção
+
+Instrução não é restrição — um agente com acesso ao shell abre qualquer arquivo que
+quiser. Por isso a separação é física, e não um pedido no prompt:
+
+- **Garantia**: o agente recebe o caminho de um arquivo **derivado**, gerado com os
+  campos daquele escopo e mais nada. O que ele não deve ver não está lá para ser lido.
+- **Convenção**: o caminho do arquivo do projeto simplesmente não é dado a ele.
+
+#### A sessão
+
+```bash
+triagem sessao abrir --escopo titulo --pendentes --lote 300
+```
+
+Isso cria uma pasta isolada:
+
+```
+sessao-ia/2026-09-21-lote-01/
+├── registros.jsonl   # só os campos do escopo
+├── LEIA-ME.md        # o que é cada campo, o critério de inclusão, o formato do parecer
+└── parecer.jsonl     # vazio; é onde o agente escreve
+```
+
+Os escopos são os mesmos da exportação manual — `titulo`, `titulo+resumo`, `pendentes`,
+`conflitos`, lote de N — porque são o mesmo conceito em dois formatos.
+
+De volta:
+
+```bash
+triagem sessao importar sessao-ia/2026-09-21-lote-01
+```
+
+Confere que cada parecer aponta para um registro daquele lote, e entra como **parecer da
+IA**, ao lado das decisões humanas. Nunca como decisão. Encerrada a importação, a pasta
+da sessão pode ser apagada.
+
+#### Consequência boa: allowlist estreita
+
+Como o agente só toca em `sessao-ia/`, dá para liberar essa pasta na configuração de
+permissões dele e nada mais. O arquivo do projeto fica fora de alcance por construção,
+sem depender de você aprovar comando a comando.
+
 ## Em análise
 
 ### Triagem por teclado
